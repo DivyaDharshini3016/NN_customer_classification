@@ -14,7 +14,8 @@ You are required to help the manager to predict the right group of the new custo
 
 ## Neural Network Model
 
-<img width="901" height="905" alt="Screenshot 2026-02-05 222929" src="https://github.com/user-attachments/assets/7678e627-ba60-4788-ac92-47942f844e69" />
+<img width="672" height="614" alt="Screenshot 2026-02-24 210046" src="https://github.com/user-attachments/assets/b6782b9b-8b2a-4ceb-9482-45f09ca83836" />
+
 
 ## DESIGN STEPS
 
@@ -47,139 +48,45 @@ Display the confusion matrix, classification report, and predictions.
 ### Register Number: 212224240039
 
 ```
-import torch
-import torch.nn as nn
-import torch.optim as optim
-import torch.nn.functional as F
-import pandas as pd
-import numpy as np
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler, LabelEncoder
-from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
-from torch.utils.data import TensorDataset, DataLoader
-import seaborn as sns
-import matplotlib.pyplot as plt
-
-# Load dataset
-data = pd.read_csv("/content/customers.csv")
-data.columns = data.columns.str.strip()  # remove any leading/trailing spaces
-
-# Drop ID column
-data = data.drop(columns=["ID"])
-
-# Handle missing values
-data.fillna({"Work_Experience": 0, "Family_Size": data["Family_Size"].median()}, inplace=True)
-
-# Encode categorical variables
-categorical_columns = ["Gender", "Ever_Married", "Graduated", "Profession", "Spending_Score", "Var_1"]
-for col in categorical_columns:
-    data[col] = LabelEncoder().fit_transform(data[col])
-
-# Encode target variable
-label_encoder = LabelEncoder()
-data["Segmentation"] = label_encoder.fit_transform(data["Segmentation"])
-
-# Split features and target
-X = data.drop(columns=["Segmentation"])
-y = data["Segmentation"].values
-
-# Train-test split
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
-# Normalize features
-scaler = StandardScaler()
-X_train = scaler.fit_transform(X_train)
-X_test = scaler.transform(X_test)
-
-# Convert to tensors
-X_train = torch.tensor(X_train, dtype=torch.float32)
-X_test = torch.tensor(X_test, dtype=torch.float32)
-y_train = torch.tensor(y_train, dtype=torch.long)
-y_test = torch.tensor(y_test, dtype=torch.long)
-
-# Create DataLoader
-train_dataset = TensorDataset(X_train, y_train)
-test_dataset = TensorDataset(X_test, y_test)
-train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True)
-test_loader = DataLoader(test_dataset, batch_size=16)
-
-# Define Neural Network
+# Define Neural Network(Model1)
 class PeopleClassifier(nn.Module):
-    def __init__(self, input_size, num_classes):
+    def __init__(self, input_size):
         super(PeopleClassifier, self).__init__()
         self.fc1 = nn.Linear(input_size, 32)
-        self.fc2 = nn.Linear(32, 32)
-        self.fc3 = nn.Linear(32, num_classes)
-        
+        self.fc2 = nn.Linear(32, 16)
+        self.fc3 = nn.Linear(16, 8)
+        self.fc4 = nn.Linear(8, 4)
+
     def forward(self, x):
-        x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
-        x = self.fc3(x)
-        return x
+      x = F.relu(self.fc1(x))
+      x = F.relu(self.fc2(x))
+      x = F.relu(self.fc3(x))
+      x = self.fc4(x)
+      return x
+```
 
-# Initialize model
-input_size = X_train.shape[1]
-num_classes = len(np.unique(y))
-model = PeopleClassifier(input_size, num_classes)
-
-# Loss and optimizer
+```
+ # Initialize model
+model = PeopleClassifier(input_size = X_train.shape[1])
 criterion = nn.CrossEntropyLoss()
 optimizer = optim.Adam(model.parameters(), lr=0.001)
 
-# Training loop
-def train_model(model, train_loader, criterion, optimizer, epochs=50):
-    model.train()
-    for epoch in range(epochs):
-        for X_batch, y_batch in train_loader:
-            optimizer.zero_grad()
-            outputs = model(X_batch)
-            loss = criterion(outputs, y_batch)
-            loss.backward()
-            optimizer.step()
-        if (epoch + 1) % 10 == 0:
-            print(f'Epoch [{epoch+1}/{epochs}], Loss: {loss.item():.4f}')
+```
 
-# Train the model
-train_model(model, train_loader, criterion, optimizer, epochs=50)
+```
+# Training Loop
+def train_model(model, train_loader, criterion, optimizer, epochs):
+  model.train()
+  for epoch in range(epochs):
+    for inputs, labels in train_loader:
+      optimizer.zero_grad()
+      outputs = model(inputs)
+      loss = criterion(outputs, labels)
+      loss.backward()
+      optimizer.step()
 
-# Evaluation
-model.eval()
-predictions, actuals = [], []
-with torch.no_grad():
-    for X_batch, y_batch in test_loader:
-        outputs = model(X_batch)
-        _, predicted = torch.max(outputs, 1)
-        predictions.extend(predicted.numpy())
-        actuals.extend(y_batch.numpy())
-
-# Compute metrics
-accuracy = accuracy_score(actuals, predictions)
-conf_matrix = confusion_matrix(actuals, predictions)
-class_report = classification_report(actuals, predictions, target_names=label_encoder.classes_)
-print("Name:          ")
-print("Register No:       ")
-print(f'Test Accuracy: {accuracy:.2f}')
-print("Confusion Matrix:\n", conf_matrix)
-print("Classification Report:\n", class_report)
-
-# Confusion matrix heatmap
-sns.heatmap(conf_matrix, annot=True, cmap='Blues', xticklabels=label_encoder.classes_, yticklabels=label_encoder.classes_, fmt='g')
-plt.xlabel("Predicted Labels")
-plt.ylabel("True Labels")
-plt.title("Confusion Matrix")
-plt.show()
-
-# Prediction for a sample input
-sample_input = X_test[12].clone().unsqueeze(0)
-with torch.no_grad():
-    output = model(sample_input)
-    predicted_class_index = torch.argmax(output[0]).item()
-    predicted_class_label = label_encoder.inverse_transform([predicted_class_index])[0]
-
-print("Name:          ")
-print("Register No:       ")
-print(f'Predicted class for sample input: {predicted_class_label}')
-print(f'Actual class for sample input: {label_encoder.inverse_transform([y_test[12].item()])[0]}')
+  if (epoch + 1) % 10 == 0:
+        print(f'Epoch [{epoch+1}/{epochs}], Loss: {loss.item():.4f}')
 ```
 
 ## Dataset Information
@@ -188,19 +95,21 @@ print(f'Actual class for sample input: {label_encoder.inverse_transform([y_test[
 
 ## OUTPUT
 
-<img width="451" height="122" alt="image" src="https://github.com/user-attachments/assets/ef8796c7-2134-42b3-8030-0dd5fc7f98b5" />
-
 ### Confusion Matrix
 
-<img width="793" height="510" alt="image" src="https://github.com/user-attachments/assets/2a161251-4f6f-40e4-b66c-0bd2474212f5" />
+<img width="531" height="447" alt="image" src="https://github.com/user-attachments/assets/d2db08d3-2238-41b4-ad36-02ef7764de58" />
+
 
 ### Classification Report
 
-<img width="825" height="393" alt="image" src="https://github.com/user-attachments/assets/c1b51cee-c458-421e-91dc-2b27473da6ab" />
+<img width="635" height="365" alt="image" src="https://github.com/user-attachments/assets/a4dac700-67d4-4e16-9c4c-128b2b93c149" />
+
+
 
 ### New Sample Data Prediction
 
-<img width="972" height="322" alt="image" src="https://github.com/user-attachments/assets/da1e4a4a-55c2-4000-8cd4-e0e2ee9204b6" />
+<img width="1277" height="305" alt="image" src="https://github.com/user-attachments/assets/89b6105b-ed07-47e8-98db-c34ea87c53c9" />
+
 
 ## RESULT
 Thus, a neural network classification model for the given dataset as been created successfully.
